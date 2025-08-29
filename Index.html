@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Sports Photo Enhancer - Bulk Edition</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#4c51bf"/>
+    <meta name="description" content="AI-powered bulk photo editor for sports photography.">
+    <!-- PWA file links -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .upload-box {
+            border: 2px dashed #4a5568;
+            transition: all 0.3s ease;
+        }
+        .upload-box.dragover {
+            border-color: #4c51bf;
+            background-color: #2d3748;
+        }
+        .loader {
+            border-top-color: #4c51bf;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a202c;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096;
+        }
+        .image-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased">
+    <div class="min-h-screen flex flex-col items-center p-4 md:p-8">
+        
+        <!-- Header -->
+        <header class="w-full max-w-7xl text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-white tracking-tight">
+                AI Sports Photo Enhancer
+            </h1>
+            <p class="text-lg text-gray-400 mt-2">
+                Bulk edit your sports photos for commercial use.
+            </p>
+        </header>
+
+        <!-- Main Content -->
+        <main id="app" class="w-full max-w-7xl">
+            
+            <!-- Uploader View -->
+            <div id="uploader" class="w-full">
+                <div id="upload-area" class="upload-box bg-gray-800 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-700">
+                    <div class="flex flex-col items-center justify-center space-y-4">
+                        <svg class="w-16 h-16 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                        </svg>
+                        <p class="text-lg font-medium">Drag & drop your photos here</p>
+                        <p class="text-gray-400">or</p>
+                        <button id="browse-btn" type="button" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition-colors">
+                            Browse Files
+                        </button>
+                    </div>
+                    <input type="file" id="file-input" class="hidden" accept="image/jpeg, image/png, image/webp" multiple>
+                </div>
+                <p class="text-center text-sm text-gray-500 mt-4">Supports bulk uploading of JPEG, PNG, and WebP formats.</p>
+            </div>
+
+            <!-- Editor View -->
+            <div id="editor" class="hidden w-full">
+                <!-- Controls -->
+                <div class="mb-6 bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col sm:flex-row items-center justify-center gap-4 sticky top-4 z-10">
+                    <button id="enhance-btn" class="w-full sm:w-auto px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                        ✨ Enhance All
+                    </button>
+                    <button id="download-btn" class="w-full sm:w-auto px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-all shadow-lg disabled:bg-gray-600 disabled:cursor-not-allowed">
+                        Download All (ZIP)
+                    </button>
+                    <button id="reset-btn" class="w-full sm:w-auto px-8 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-700 transition-all shadow-lg">
+                        Upload New Photos
+                    </button>
+                </div>
+
+                <!-- Image Grid -->
+                <div id="image-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <!-- Image cards will be inserted here -->
+                </div>
+                 <p id="processing-status" class="text-center text-lg text-gray-400 mt-6 hidden"></p>
+            </div>
+        </main>
+        
+        <!-- Modal for errors -->
+        <div id="error-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
+            <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-center">
+                <h3 class="text-xl font-bold text-red-400 mb-2">An Error Occurred</h3>
+                <p id="error-message" class="text-gray-300 mb-4"></p>
+                <button id="close-modal-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Service Worker Registration
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(registration => {
+                            console.log('Service Worker registered! Scope:', registration.scope);
+                        })
+                        .catch(err => {
+                            console.log('Service Worker registration failed:', err);
+                        });
+                });
+            }
+
+            // DOM Elements
+            const uploader = document.getElementById('uploader');
+            const editor = document.getElementById('editor');
+            const uploadArea = document.getElementById('upload-area');
+            const browseBtn = document.getElementById('browse-btn');
+            const fileInput = document.getElementById('file-input');
+            const imageGrid = document.getElementById('image-grid');
+            const enhanceBtn = document.getElementById('enhance-btn');
+            const downloadBtn = document.getElementById('download-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const processingStatus = document.getElementById('processing-status');
+            const errorModal = document.getElementById('error-modal');
+            const errorMessage = document.getElementById('error-message');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+
+            let imageQueue = [];
+            let isProcessing = false;
+
+            // --- Event Listeners ---
+            browseBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+            uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+            uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); });
+            uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+            enhanceBtn.addEventListener('click', processQueue);
+            downloadBtn.addEventListener('click', downloadAllAsZip);
+            resetBtn.addEventListener('click', resetApp);
+            closeModalBtn.addEventListener('click', () => errorModal.classList.add('hidden'));
+
+            // --- Functions ---
+
+            function handleFiles(files) {
+                if (files.length === 0) return;
+                
+                for (const file of files) {
+                    if (!file.type.startsWith('image/')) {
+                        showError(`Skipping non-image file: ${file.name}`);
+                        continue;
+                    }
+                    const imageId = `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+                    const imageObject = {
+                        id: imageId,
+                        file: file,
+                        originalDataURL: null,
+                        enhancedDataURL: null,
+                        status: 'queued', // queued, processing, done, error
+                    };
+                    imageQueue.push(imageObject);
+                    renderImageCard(imageObject);
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imageObject.originalDataURL = e.target.result;
+                        const card = document.getElementById(imageObject.id);
+                        if(card) {
+                            card.querySelector('.original-img').src = imageObject.originalDataURL;
+                        }
+                    };
+                    reader.onerror = () => {
+                        imageObject.status = 'error';
+                         updateCardStatus(imageObject, 'File read error');
+                    };
+                    reader.readAsDataURL(file);
+                }
+                
+                if (imageQueue.length > 0) {
+                    switchToEditor();
+                }
+            }
+
+            function renderImageCard(imageObject) {
+                const cardHTML = `
+                    <div id="${imageObject.id}" class="image-card bg-gray-800 rounded-lg overflow-hidden shadow-lg flex flex-col">
+                        <div class="relative">
+                            <img class="original-img w-full h-48 object-cover" src="https://placehold.co/400x300/1a202c/4a5568?text=Loading..." alt="Original">
+                            <div class="status-overlay absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-semibold">
+                                <span class="status-text">Ready to Enhance</span>
+                            </div>
+                            <div class="loader-overlay absolute inset-0 bg-black bg-opacity-75 flex-col items-center justify-center hidden">
+                                <div class="loader w-8 h-8 rounded-full border-4 border-gray-600"></div>
+                            </div>
+                        </div>
+                        <div class="p-4 flex-grow flex flex-col">
+                            <p class="text-sm font-medium text-white truncate" title="${imageObject.file.name}">${imageObject.file.name}</p>
+                            <p class="text-xs text-gray-400 mb-2">${(imageObject.file.size / 1024).toFixed(1)} KB</p>
+                            <button class="download-one-btn mt-auto w-full px-4 py-2 text-sm bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Download</button>
+                        </div>
+                    </div>
+                `;
+                imageGrid.insertAdjacentHTML('beforeend', cardHTML);
+                const cardElement = document.getElementById(imageObject.id);
+                cardElement.querySelector('.download-one-btn').addEventListener('click', () => downloadSingleImage(imageObject));
+            }
+
+            function updateCardStatus(imageObject, text, isLoading = false, isError = false) {
+                 const card = document.getElementById(imageObject.id);
+                 if (!card) return;
+                 const statusText = card.querySelector('.status-text');
+                 const statusOverlay = card.querySelector('.status-overlay');
+                 const loaderOverlay = card.querySelector('.loader-overlay');
+                 const downloadBtn = card.querySelector('.download-one-btn');
+
+                 statusText.textContent = text;
+                 statusOverlay.classList.toggle('bg-red-800', isError);
+                 statusOverlay.classList.toggle('bg-opacity-75', !isLoading);
+
+                 if (isLoading) {
+                    loaderOverlay.classList.remove('hidden');
+                    loaderOverlay.classList.add('flex');
+                    statusOverlay.classList.add('hidden');
+                 } else {
+                    loaderOverlay.classList.add('hidden');
+                    statusOverlay.classList.remove('hidden');
+                 }
+
+                 if(imageObject.status === 'done') {
+                     statusOverlay.classList.add('hidden');
+                     downloadBtn.disabled = false;
+                     // Show enhanced image by replacing original
+                     const img = card.querySelector('.original-img');
+                     img.src = imageObject.enhancedDataURL;
+                     img.alt = "Enhanced";
+                 }
+            }
+
+
+            function switchToEditor() {
+                uploader.classList.add('hidden');
+                editor.classList.remove('hidden');
+                updateButtonStates();
+            }
+
+            function resetApp() {
+                uploader.classList.remove('hidden');
+                editor.classList.add('hidden');
+                imageGrid.innerHTML = '';
+                fileInput.value = '';
+                imageQueue = [];
+                isProcessing = false;
+                processingStatus.classList.add('hidden');
+            }
+
+            function updateButtonStates() {
+                const queuedCount = imageQueue.filter(img => img.status === 'queued').length;
+                const doneCount = imageQueue.filter(img => img.status === 'done').length;
+                
+                enhanceBtn.disabled = queuedCount === 0 || isProcessing;
+                downloadBtn.disabled = doneCount === 0;
+            }
+            
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorModal.classList.remove('hidden');
+                errorModal.classList.add('flex');
+            }
+
+            async function processQueue() {
+                if(isProcessing) return;
+                isProcessing = true;
+                updateButtonStates();
+                
+                let processedCount = 0;
+                const totalToProcess = imageQueue.filter(img => img.status === 'queued').length;
+                
+                if(totalToProcess === 0) {
+                    isProcessing = false;
+                    updateButtonStates();
+                    return;
+                }
+
+                processingStatus.classList.remove('hidden');
+
+                for (const imageObject of imageQueue) {
+                    if (imageObject.status === 'queued') {
+                        processedCount++;
+                        processingStatus.textContent = `Processing image ${processedCount} of ${totalToProcess}...`;
+                        await callEnhanceAPI(imageObject);
+                    }
+                }
+                
+                isProcessing = false;
+                updateButtonStates();
+                processingStatus.textContent = `Processing complete. ${imageQueue.filter(i=>i.status === 'done').length} images enhanced.`;
+            }
+
+            async function callEnhanceAPI(imageObject) {
+                if (!imageObject.originalDataURL) {
+                     imageObject.status = 'error';
+                     updateCardStatus(imageObject, 'No image data', false, true);
+                    return;
+                }
+                
+                imageObject.status = 'processing';
+                updateCardStatus(imageObject, 'Enhancing...', true);
+
+                const base64Data = imageObject.originalDataURL.split(',')[1];
+                const mimeType = imageObject.originalDataURL.match(/data:(.*);base64/)[1];
+
+                const userPrompt = `You are an expert photo editor for professional sports photography. Make this photo commercially viable. Perform these actions:
+                    1.  **Correct Exposure:** Fix over/underexposure. Preserve details in highlights/shadows.
+                    2.  **Increase Sharpness:** Subtly enhance clarity against motion blur without over-sharpening.
+                    3.  **Remove Harsh Shadows:** Intelligently lighten distracting shadows.
+                    4.  **Auto-Crop for Impact:** Crop using the rule of thirds to focus on peak action.
+                    5.  **Enhance Colors:** Boost vibrance slightly for pop.
+                    Return only the edited image.`;
+
+                const payload = {
+                    contents: [{
+                        parts: [ { text: userPrompt }, { inlineData: { mimeType, data: base64Data } } ]
+                    }],
+                    generationConfig: { responseModalities: ['IMAGE'] },
+                };
+                
+                const apiKey = "AIzaSyCVmP_UmSGHDQmbSpfsbSFZ4TUE2jbvzVY";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetchWithRetry(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const generatedPart = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+
+                    if (!generatedPart) {
+                        const blockReason = result?.promptFeedback?.blockReason;
+                        throw new Error(blockReason ? `Blocked: ${blockReason}` : 'No image data in AI response.');
+                    }
+                    
+                    imageObject.enhancedDataURL = `data:${generatedPart.inlineData.mimeType};base64,${generatedPart.inlineData.data}`;
+                    imageObject.status = 'done';
+                    updateCardStatus(imageObject, 'Done');
+                } catch (error) {
+                    console.error('API Call Error:', error);
+                    imageObject.status = 'error';
+                    updateCardStatus(imageObject, error.message.substring(0, 30), false, true);
+                } finally {
+                    updateButtonStates();
+                }
+            }
+
+            async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.status !== 429 && response.status < 500) { return response; }
+                        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+                    } catch (error) {
+                        if (i === retries - 1) throw error;
+                        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+                    }
+                }
+            }
+            
+            function downloadSingleImage(imageObject) {
+                 if(imageObject.status !== 'done' || !imageObject.enhancedDataURL) return;
+                 const link = document.createElement('a');
+                 link.href = imageObject.enhancedDataURL;
+                 const nameParts = imageObject.file.name.split('.');
+                 const extension = nameParts.pop();
+                 const name = nameParts.join('.');
+                 link.download = `${name}-enhanced.${extension}`;
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+            }
+
+            async function downloadAllAsZip() {
+                const completedImages = imageQueue.filter(img => img.status === 'done');
+                if (completedImages.length === 0) return;
+                
+                processingStatus.textContent = "Zipping files, please wait...";
+                processingStatus.classList.remove('hidden');
+
+                const zip = new JSZip();
+                for(const imageObject of completedImages) {
+                    const base64Data = imageObject.enhancedDataURL.split(',')[1];
+                    const nameParts = imageObject.file.name.split('.');
+                    const extension = nameParts.pop();
+                    const name = nameParts.join('.');
+                    const filename = `${name}-enhanced.${extension}`;
+                    zip.file(filename, base64Data, { base64: true });
+                }
+
+                try {
+                    const content = await zip.generateAsync({type:"blob"});
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(content);
+                    link.download = `enhanced-sports-photos.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    processingStatus.textContent = "Download complete!";
+                } catch(err) {
+                    console.error("Zip Error:", err);
+                    showError("Failed to create ZIP file.");
+                    processingStatus.textContent = "Error creating ZIP file.";
+                }
+            }
+        });
+    </script>
+</body>
+</html>
